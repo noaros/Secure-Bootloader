@@ -1,4 +1,7 @@
+Claude's idea of a secure bootloader demo for my Nucleo F429ZI. I plan to try it out and go over the details soon...
 # Secure-Bootloader
+
+================ Claude README below ============
 
 A secure A/B bootloader demo for the **NUCLEO-F429ZI** (STM32F429ZI). Everything is register-level C: no HAL, no CMSIS downloads.
 
