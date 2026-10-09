@@ -115,11 +115,14 @@ monitor:
 # Write-protect the bootloader sectors (0-1). RDP=1 additionally enables
 # readout protection; undoing that mass-erases the chip. Never use level 2
 # on a dev board: it is permanent.
+# CubeProgrammer exposes one nWRPi bit per sector (0 = protected) and only
+# warns about invalid values, so keep these as single bits. SPRMOD=0 makes the
+# bits mean write protection rather than PCROP.
 protect:
-	$(PROGRAMMER) -c port=SWD mode=UR -ob nWRP0=0xFFC $(if $(filter 1,$(RDP)),RDP=0xBB)
+	$(PROGRAMMER) -c port=SWD mode=UR -ob SPRMOD=0 nWRP0=0 nWRP1=0 $(if $(filter 1,$(RDP)),RDP=0xBB)
 
 unprotect:
-	$(PROGRAMMER) -c port=SWD mode=UR -ob RDP=0xAA nWRP0=0xFFF
+	$(PROGRAMMER) -c port=SWD mode=UR -ob RDP=0xAA SPRMOD=0 nWRP0=1 nWRP1=1
 
 # ---- host tests ----------------------------------------------------------
 

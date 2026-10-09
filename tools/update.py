@@ -17,6 +17,7 @@ import struct
 import sys
 import termios
 import time
+import tty
 import zlib
 
 ACK, NAK, ERR = 0x06, 0x15, 0x18
@@ -111,6 +112,30 @@ def monitor(port, seconds):
             sys.stdout.flush()
 
 
+def terminal(port):
+    """Interactive console: show device output and send each keystroke as typed."""
+    stdin = sys.stdin.fileno()
+    saved = termios.tcgetattr(stdin) if os.isatty(stdin) else None
+    if saved:
+        tty.setcbreak(stdin)                    # unbuffered keys, Ctrl-C still works
+    print("---- console (Ctrl-C to exit) ----")
+    try:
+        while True:
+            r, _, _ = select.select([port.fd, stdin], [], [])
+            if port.fd in r:
+                data = os.read(port.fd, 256)
+                sys.stdout.write(data.decode("utf-8", "replace").replace("\r", ""))
+                sys.stdout.flush()
+            if stdin in r:
+                key = os.read(stdin, 64)
+                if not key:                     # stdin closed: keep showing output
+                    monitor(port, float("inf"))
+                port.write(key)
+    finally:
+        if saved:
+            termios.tcsetattr(stdin, termios.TCSADRAIN, saved)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", required=True, help="serial device, e.g. /dev/ttyACM0")
@@ -121,7 +146,7 @@ def main():
 
     port = Port(args.port)
     if not args.images:
-        monitor(port, float("inf"))
+        terminal(port)
         return
 
     images = load_images(args.images)
