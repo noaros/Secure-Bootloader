@@ -1,4 +1,7 @@
 Claude's idea of a secure bootloader demo for my Nucleo F429ZI. I plan to try it out and go over the details soon...
+
+There were two issues, possibly because I didn't have the board hooked up when Claude first did its thing. The console commands (which I didn't expect but was a nice touch) didn't work via the 'make monitor' script. Also the memory protect wasn't working, as indicated by an error message. Most amazingly of all, when I told Claude to took at these two issues with the board connected, it fixed them both, complete with code changes and comments! This is truly a new era...
+
 # Secure-Bootloader
 
 ================ Claude README below ============
