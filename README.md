@@ -4,7 +4,13 @@ Claude's idea of a secure bootloader demo for my Nucleo F429ZI. I plan to try it
 
 There were two issues, possibly because I didn't have the board hooked up when Claude first did its thing. The console commands (which I didn't expect but was a nice touch) didn't work via the 'make monitor' script. Also the memory protect wasn't working, as indicated by an error message. Most amazingly of all, when I told Claude to took at these two issues with the board connected, it fixed them both, complete with code changes and comments! This is truly a new era...
 
-I had Claude trace through the system and generate detailed docs. In doing so it identified two edge cases, for when the trial image runs out and when the prior good image is damaged. I had it patch those as well and update the docs. I had it move the doc from artifact into the repo, and in doing so it exported the file, realized a diagram wouldn't export properly, so redid it in a format that would work on GitHub! It noticed it needed to pull and rebase as well. This keeps feeling like magic. The walkthrough docs are in docs directory and I plan to give them a thorough read. I reran the basic checks described below as a sanity check on latest changes.
+I had Claude trace through the system and generate detailed docs. In doing so it identified two edge cases, for when the trial image runs out and when the prior good image is damaged. I had it patch those as well and update the docs. I had it move the doc from artifact into the repo, and in doing so it exported the file, realized a diagram wouldn't export properly, so redid it in a format that would work on GitHub! It noticed it needed to pull and rebase as well. This keeps feeling like magic. The walkthrough docs are in docs directory and I plan to give them a thorough read. I reran the basic checks as a sanity check on latest changes.
+
+I do love it when Claude critiques its own work. Here are some issues noticed by another session:
+
+The app can reset the anti-rollback floor. The floor is stored in the boot-state log, which the app itself can write. If both log sectors get erased, the bootloader treats the board as new, sets the floor to 0, and boots the highest-version image. Signatures still prevent unsigned code, so this is a rollback weakness, not a code-execution one. The README’s “Trust boundary” note mentions the app being trusted but not this effect. Storing the floor in OTP or option bytes, or protecting it with the MPU, would close it.
+
+Fresh boots rank images by version, not security_counter. If a signed image has a higher version but a lower counter, it wins that first scan. That’s a minor quirk.
 
 ================ Claude README below ============
 
