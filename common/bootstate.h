@@ -51,6 +51,13 @@ typedef struct {
 /* Decide what to boot, persisting attempt counters / rollbacks as needed. */
 void boot_decide(boot_decision_t *d);
 
+/*
+ * Slot a recovery upload should overwrite: an empty or invalid slot, else the
+ * one not holding the last confirmed image. Also returns the current
+ * anti-rollback floor in *min_sc.
+ */
+unsigned boot_recovery_target(uint32_t *min_sc);
+
 /* ---- Application helpers ---- */
 
 #define BS_ERR_NO_STATE  (-10)

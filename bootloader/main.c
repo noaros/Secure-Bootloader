@@ -68,26 +68,10 @@ static void __attribute__((noreturn)) jump_to_image(const boot_decision_t *d)
     __builtin_unreachable();
 }
 
-/* Choose where a recovery upload goes without destroying a good fallback. */
-static unsigned recovery_target(uint32_t *min_sc)
-{
-    boot_state_t st;
-    int have = bs_load(&st);
-    *min_sc = have ? st.min_security_counter : 0;
-
-    int ok_a = image_verify(0, *min_sc, 0) == IMG_OK;
-    int ok_b = image_verify(1, *min_sc, 0) == IMG_OK;
-    if (ok_a && ok_b)
-        return have ? st.active_slot ^ 1u : 1u;
-    if (ok_a)
-        return 1;
-    return 0;
-}
-
 static void __attribute__((noreturn)) recovery(const char *why)
 {
     uint32_t min_sc;
-    unsigned target = recovery_target(&min_sc);
+    unsigned target = boot_recovery_target(&min_sc);
 
     con_printf("\n[recovery] %s\n", why);
     con_printf("[recovery] waiting for a signed image for slot %c over this UART\n",
@@ -118,7 +102,7 @@ static void __attribute__((noreturn)) recovery(const char *why)
             system_reset();
         }
         con_printf("\n[recovery] upload failed: %s\n", image_strerror(rc));
-        target = recovery_target(&min_sc);
+        target = boot_recovery_target(&min_sc);
     }
 }
 

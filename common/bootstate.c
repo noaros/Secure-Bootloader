@@ -162,13 +162,24 @@ void boot_decide(boot_decision_t *d)
             return;
         }
 
-        /* Roll back to the previous (confirmed) slot. */
-        active ^= 1u;
-        con_printf("[boot] ROLLBACK to slot %c\n", slot_name(active));
-        st->active_slot = (uint8_t)active;
+        /*
+         * Roll back to the previous (confirmed) slot. If that one is no longer
+         * authentic, leave the state untouched and enter recovery: the failed
+         * trial image must never be booted again, and keeping the record as
+         * an exhausted PENDING makes every later reset come back here.
+         */
+        unsigned prev = active ^ 1u;
+        if (verify(prev, st->min_security_counter, &d->hdr) != IMG_OK) {
+            con_printf("[boot] cannot roll back: slot %c is not bootable\n", slot_name(prev));
+            return;
+        }
+        con_printf("[boot] ROLLBACK to slot %c\n", slot_name(prev));
+        st->active_slot = (uint8_t)prev;
         st->state = BS_CONFIRMED;
         st->attempts = 0;
         persist(st);
+        d->slot = (int)prev;
+        return;
     }
 
     if (verify(active, st->min_security_counter, &d->hdr) == IMG_OK) {
@@ -176,16 +187,43 @@ void boot_decide(boot_decision_t *d)
         return;
     }
 
-    /* Confirmed image is damaged: try the other slot if it is authentic. */
+    /*
+     * Confirmed image is damaged: try the other slot if it is authentic. It
+     * may never have confirmed itself (e.g. a rolled-back release), so it
+     * boots as a trial and gets the same attempt limit as any new image.
+     */
     unsigned other = active ^ 1u;
     if (verify(other, st->min_security_counter, &d->hdr) == IMG_OK) {
-        con_printf("[boot] falling back to slot %c\n", slot_name(other));
+        con_printf("[boot] falling back to slot %c (trial)\n", slot_name(other));
         st->active_slot = (uint8_t)other;
-        st->state = BS_CONFIRMED;
-        st->attempts = 0;
+        st->state = BS_PENDING;
+        st->attempts = 1;
         persist(st);
         d->slot = (int)other;
+        d->trial = 1;
     }
+}
+
+unsigned boot_recovery_target(uint32_t *min_sc)
+{
+    boot_state_t st;
+    int have = bs_load(&st);
+    *min_sc = have ? st.min_security_counter : 0;
+
+    int ok_a = image_verify(0, *min_sc, 0) == IMG_OK;
+    int ok_b = image_verify(1, *min_sc, 0) == IMG_OK;
+    if (ok_a && ok_b) {
+        if (!have)
+            return 1;
+        /*
+         * Keep the last confirmed image. While a trial is pending, that is
+         * the inactive slot, so the upload replaces the trial image instead.
+         */
+        return st.state == BS_PENDING ? st.active_slot : st.active_slot ^ 1u;
+    }
+    if (ok_a)
+        return 1;
+    return 0;
 }
 
 int bs_confirm(unsigned running_slot, uint32_t security_counter)

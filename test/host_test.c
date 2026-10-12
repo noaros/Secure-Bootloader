@@ -244,8 +244,70 @@ static void test_policy(void)
     CHECK(d.slot == 1 && d.st.min_security_counter == 2);
     install(0, "A_v3");
     *fake_flash_raw(SLOT_B_ADDR + 0x300) ^= 0x01;
+    d = decide();                             /* never confirmed -> boots on trial */
+    CHECK(d.slot == 0 && d.trial && d.st.state == BS_PENDING && d.st.attempts == 1);
+    CHECK(bs_confirm(0, d.hdr.security_counter) == 1);
     d = decide();
-    CHECK(d.slot == 0 && !d.trial);
+    CHECK(d.slot == 0 && !d.trial && d.st.min_security_counter == 3);
+
+    /* A fallback image that never confirms is not retried forever. */
+    fake_flash_reset();
+    install(0, "A_v1");
+    install(1, "B_v2");
+    CHECK(decide().slot == 1);                /* factory: B confirmed, floor 2 */
+    install(0, "A_v3");
+    *fake_flash_raw(SLOT_B_ADDR + 0x300) ^= 0x01;
+    for (unsigned i = 1; i <= BOOT_MAX_ATTEMPTS; i++) {
+        d = decide();
+        CHECK(d.slot == 0 && d.trial && d.st.attempts == i);
+    }
+    for (int i = 0; i < 3; i++)
+        CHECK(decide().slot == -1);
+
+    /* Trial runs out and the previous slot is damaged: recovery, never the failed image. */
+    fake_flash_reset();
+    install(0, "A_v1");
+    CHECK(decide().slot == 0);
+    install(1, "B_v2");
+    CHECK(bs_request_trial(1, 0) == FLASH_OK);
+    for (unsigned i = 1; i <= BOOT_MAX_ATTEMPTS; i++)
+        CHECK(decide().slot == 1);
+    *fake_flash_raw(SLOT_A_ADDR + 0x300) ^= 0x01;
+    for (int i = 0; i < 3; i++)
+        CHECK(decide().slot == -1);           /* stays put across resets */
+    CHECK(bs_load(&st) && st.state == BS_PENDING && st.active_slot == 1);
+    uint32_t min_sc;
+    CHECK(boot_recovery_target(&min_sc) == 0 && min_sc == 1);   /* overwrite the damaged slot */
+}
+
+static void test_recovery_target(void)
+{
+    uint32_t min_sc;
+
+    /* Empty flash, or only one good slot: write the other one. */
+    fake_flash_reset();
+    CHECK(boot_recovery_target(&min_sc) == 0 && min_sc == 0);
+    install(0, "A_v1");
+    CHECK(boot_recovery_target(&min_sc) == 1);
+    fake_flash_reset();
+    install(1, "B_v2");
+    CHECK(boot_recovery_target(&min_sc) == 0);
+
+    /* Both valid, no state yet: B. */
+    install(0, "A_v1");
+    CHECK(boot_recovery_target(&min_sc) == 1);
+
+    /* Both valid, A confirmed: replace the inactive B. */
+    fake_flash_reset();
+    install(0, "A_v1");
+    CHECK(decide().slot == 0);
+    install(1, "B_v2");
+    CHECK(boot_recovery_target(&min_sc) == 1 && min_sc == 1);
+
+    /* B on trial: the confirmed A is kept and the trial slot is replaced. */
+    CHECK(bs_request_trial(1, 0) == FLASH_OK);
+    CHECK(decide().slot == 1);
+    CHECK(boot_recovery_target(&min_sc) == 1);
 }
 
 int main(int argc, char **argv)
@@ -261,6 +323,7 @@ int main(int argc, char **argv)
     test_image_verify();
     test_bootstate_log();
     test_policy();
+    test_recovery_target();
 
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;

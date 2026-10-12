@@ -113,7 +113,7 @@ Hold the blue USER button and tap RESET. The red LED blinks and the bootloader w
 make update VERSION=1.3.0 SECURITY_COUNTER=3
 ```
 
-Recovery never overwrites the only good image. It writes into an empty or invalid slot, or into the inactive slot when both are valid.
+Recovery never overwrites the last confirmed image. It writes into an empty or invalid slot. When both slots are valid it replaces the inactive slot, or the trial slot if an update is still pending.
 
 **6. Lock it down**
 
@@ -148,11 +148,14 @@ reset ─► USER button held? ──yes──► recovery (UART upload)
            │
      PENDING? ──yes──► attempts < 3 and image valid? ──yes──► attempts++, trial boot
            │                     │no
-           │                     └──► ROLLBACK: other slot, CONFIRMED
+           │                     ▼
+           │           previous slot valid? ──yes──► ROLLBACK: previous slot, CONFIRMED
+           │                     │no
+           │                     └──► recovery (state kept, failed image never rebooted)
            ▼
      verify active ──ok──► arm IWDG, jump
            │fail
-     verify other ──ok──► switch, jump
+     verify other ──ok──► switch, boot it as a trial (PENDING)
            │fail
            └──► recovery
 ```
